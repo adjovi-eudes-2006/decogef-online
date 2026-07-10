@@ -1,0 +1,196 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { createEvent } from "@/actions/admin";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Card } from "@/components/ui/Card";
+import { ImagePlus, Plus, Trash2, ArrowLeft } from "lucide-react";
+
+export function EventForm() {
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [imageBase64, setImageBase64] = useState("");
+  const [categories, setCategories] = useState([{ name: "", price: "", maxQuantity: "" }]);
+  const [form, setForm] = useState({ title: "", description: "", date: "", location: "" });
+  const [error, setError] = useState("");
+
+  const addCategory = () => {
+    setCategories([...categories, { name: "", price: "", maxQuantity: "" }]);
+  };
+
+  const removeCategory = (idx: number) => {
+    if (categories.length <= 1) return;
+    setCategories(categories.filter((_, i) => i !== idx));
+  };
+
+  const updateCategory = (idx: number, field: string, value: string) => {
+    const updated = [...categories];
+    updated[idx] = { ...updated[idx], [field]: value };
+    setCategories(updated);
+  };
+
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setImageBase64(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
+
+    const parsed = categories
+      .filter((c) => c.name.trim() && c.price && c.maxQuantity)
+      .map((c) => ({
+        name: c.name.trim(),
+        price: parseInt(c.price, 10),
+        maxQuantity: parseInt(c.maxQuantity, 10),
+      }));
+
+    if (parsed.length === 0) {
+      setError("Ajoutez au moins une catégorie valide");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!form.title || !form.date || !form.location) {
+      setError("Remplissez tous les champs obligatoires");
+      setIsLoading(false);
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("title", form.title);
+    fd.append("description", form.description);
+    fd.append("date", form.date);
+    fd.append("location", form.location);
+    fd.append("coverImage", imageBase64);
+    fd.append("categories", JSON.stringify(parsed));
+
+    const result = await createEvent(fd);
+    setIsLoading(false);
+
+    if (result.success) {
+      router.push("/admin/dashboard");
+      router.refresh();
+    } else {
+      setError(result.error || "Erreur");
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <button
+        onClick={() => router.back()}
+        className="flex items-center gap-2 text-zinc-400 hover:text-gala-400 mb-6 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" /> Retour
+      </button>
+
+      <h1 className="font-display text-3xl font-bold text-white mb-8">Créer un événement</h1>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card className="p-6 space-y-5">
+          <h2 className="font-display text-lg font-bold text-white">Informations générales</h2>
+
+          <Input
+            label="Titre de l'événement *"
+            placeholder="Grand Gala 2026"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            required
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={4}
+              className="w-full px-4 py-3 rounded-xl bg-zinc-800/80 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-gala-500 focus:outline-none focus:ring-2 focus:ring-gala-500/20 transition-all"
+              placeholder="Décrivez votre événement..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Date et heure *"
+              type="datetime-local"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              required
+            />
+            <Input
+              label="Lieu *"
+              placeholder="Palais des Congrès"
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Image de couverture</label>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+            {imageBase64 ? (
+              <div className="relative rounded-xl overflow-hidden">
+                <img src={imageBase64} alt="Aperçu" className="w-full h-48 object-cover" />
+                <button type="button" onClick={() => setImageBase64("")} className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => fileRef.current?.click()} className="w-full h-36 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-gala-500 hover:text-gala-400 transition-all">
+                <ImagePlus className="w-8 h-8" />
+                <span className="text-sm">Charger une image (convertie en Base64)</span>
+              </button>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-bold text-white">Catégories de tickets</h2>
+            <Button type="button" variant="ghost" onClick={addCategory}>
+              <Plus className="w-4 h-4" /> Ajouter
+            </Button>
+          </div>
+
+          {categories.map((cat, idx) => (
+            <div key={idx} className="bg-zinc-800/50 border border-zinc-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-500 font-medium">Catégorie #{idx + 1}</span>
+                {categories.length > 1 && (
+                  <button type="button" onClick={() => removeCategory(idx)} className="text-red-400 hover:text-red-300">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <Input placeholder="Nom (ex: VIP)" value={cat.name} onChange={(e) => updateCategory(idx, "name", e.target.value)} />
+                <Input type="number" placeholder="Prix (FCFA)" value={cat.price} onChange={(e) => updateCategory(idx, "price", e.target.value)} />
+                <Input type="number" placeholder="Quantité max" value={cat.maxQuantity} onChange={(e) => updateCategory(idx, "maxQuantity", e.target.value)} />
+              </div>
+            </div>
+          ))}
+        </Card>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-3">
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        )}
+
+        <Button type="submit" fullWidth variant="gold" isLoading={isLoading}>
+          Créer l'événement
+        </Button>
+      </form>
+    </div>
+  );
+}

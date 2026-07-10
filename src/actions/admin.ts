@@ -1,0 +1,230 @@
+"use server";
+
+import { prisma } from "@/lib/prisma";
+import { verifyAdminSessionOrThrow } from "@/lib/admin-auth";
+import { eventSchema } from "@/lib/validations";
+import { revalidatePath } from "next/cache";
+import type { DashboardData, OrderData } from "@/types";
+
+export async function createEvent(
+  formData: FormData
+): Promise<{ success: boolean; error?: string; eventId?: string }> {
+  try {
+    await verifyAdminSessionOrThrow();
+
+    const rawTitle = formData.get("title") as string;
+    const rawDescription = (formData.get("description") as string) || "";
+    const rawDate = formData.get("date") as string;
+    const rawLocation = formData.get("location") as string;
+    const rawCoverImage = (formData.get("coverImage") as string) || "";
+    const rawCategories = formData.get("categories") as string;
+
+    let parsedCategories: { name: string; price: number; maxQuantity: number }[];
+    try {
+      parsedCategories = JSON.parse(rawCategories);
+    } catch {
+      return { success: false, error: "Format des catégories invalide" };
+    }
+
+    const validated = eventSchema.parse({
+      title: rawTitle,
+      description: rawDescription,
+      date: rawDate,
+      location: rawLocation,
+      coverImage: rawCoverImage,
+      categories: parsedCategories,
+    });
+
+    const event = await prisma.event.create({
+      data: {
+        title: validated.title,
+        description: validated.description,
+        date: new Date(validated.date),
+        location: validated.location,
+        coverImage: validated.coverImage || "",
+        categories: {
+          create: validated.categories.map((cat) => ({
+            name: cat.name,
+            price: cat.price,
+            maxQuantity: cat.maxQuantity,
+          })),
+        },
+      },
+    });
+
+    revalidatePath("/");
+    revalidatePath("/admin/dashboard");
+
+    return { success: true, eventId: event.id };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("Accès refusé")) {
+      return { success: false, error: error.message };
+    }
+    console.error("Create event error:", error);
+    return { success: false, error: "Erreur lors de la création" };
+  }
+}
+
+export async function validateOrder(
+  orderId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await verifyAdminSessionOrThrow();
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { tickets: true },
+    });
+
+    if (!order) return { success: false, error: "Commande introuvable" };
+    if (order.status !== "PENDING") {
+      return { success: false, error: "Commande déjà traitée" };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: "VALIDATED" },
+      });
+
+      const ticketsData = Array.from({ length: order.tickets.length }, () => ({
+        orderId: order.id,
+        categoryId: order.tickets[0].categoryId,
+      }));
+
+      const updatedOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { tickets: { include: { category: true } } },
+      });
+
+      const categoryCounts: Record<string, number> = {};
+      if (updatedOrder) {
+        for (const t of updatedOrder.tickets) {
+          categoryCounts[t.categoryId] = (categoryCounts[t.categoryId] || 0) + 1;
+        }
+      }
+
+      const createdTickets = await tx.ticket.createManyAndReturn({
+        data: updatedOrder!.tickets.map((t) => ({
+          orderId: order.id,
+          categoryId: t.categoryId,
+        })),
+      });
+
+      const catCounts: Record<string, number> = {};
+      for (const t of createdTickets) {
+        catCounts[t.categoryId] = (catCounts[t.categoryId] || 0) + 1;
+      }
+
+      for (const [catId, count] of Object.entries(catCounts)) {
+        await tx.ticketCategory.update({
+          where: { id: catId },
+          data: { soldQuantity: { increment: count } },
+        });
+      }
+    });
+
+    revalidatePath("/admin/dashboard");
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("Accès refusé")) {
+      return { success: false, error: error.message };
+    }
+    console.error("Validate order error:", error);
+    return { success: false, error: "Erreur de validation" };
+  }
+}
+
+export async function rejectOrder(
+  orderId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await verifyAdminSessionOrThrow();
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return { success: false, error: "Commande introuvable" };
+    if (order.status !== "PENDING") {
+      return { success: false, error: "Commande déjà traitée" };
+    }
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { status: "REJECTED" },
+    });
+
+    revalidatePath("/admin/dashboard");
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("Accès refusé")) {
+      return { success: false, error: error.message };
+    }
+    console.error("Reject order error:", error);
+    return { success: false, error: "Erreur" };
+  }
+}
+
+export async function getDashboardData(): Promise<DashboardData | null> {
+  try {
+    await verifyAdminSessionOrThrow();
+
+    const orders = await prisma.order.findMany({
+      include: {
+        tickets: { include: { category: true } },
+        event: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const pendingOrders: OrderData[] = [];
+    const validatedOrders: OrderData[] = [];
+
+    for (const o of orders) {
+      const orderData: OrderData = {
+        id: o.id,
+        eventId: o.eventId,
+        buyerName: o.buyerName,
+        buyerEmail: o.buyerEmail,
+        buyerPhone: o.buyerPhone,
+        referenceMomo: o.referenceMomo,
+        totalAmount: o.totalAmount,
+        status: o.status,
+        tickets: o.tickets.map((t) => ({
+          id: t.id,
+          orderId: t.orderId,
+          categoryId: t.categoryId,
+          categoryName: t.category.name,
+          isUsed: t.isUsed,
+          usedAt: t.usedAt?.toISOString() ?? null,
+        })),
+        createdAt: o.createdAt.toISOString(),
+      };
+
+      if (o.status === "PENDING") pendingOrders.push(orderData);
+      if (o.status === "VALIDATED") validatedOrders.push(orderData);
+    }
+
+    const totalRevenue = validatedOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+    const totalTicketsSold = validatedOrders.reduce((sum, o) => sum + o.tickets.length, 0);
+
+    const categories = await prisma.ticketCategory.findMany();
+    const categoriesStats = categories.map((cat) => ({
+      name: cat.name,
+      sold: cat.soldQuantity,
+      revenue: cat.soldQuantity * cat.price,
+    }));
+
+    const eventCount = await prisma.event.count();
+
+    return {
+      pendingOrders,
+      validatedOrders,
+      totalRevenue,
+      totalTicketsSold,
+      categoriesStats,
+      eventCount,
+    };
+  } catch {
+    return null;
+  }
+}
+

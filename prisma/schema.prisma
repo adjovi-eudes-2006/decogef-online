@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id          String           @id @default(uuid())
+  title       String
+  description String           @db.Text
+  date        DateTime
+  location    String
+  coverImage  String           @db.Text
+  categories  TicketCategory[]
+  orders      Order[]
+  createdAt   DateTime         @default(now())
+}
+
+model TicketCategory {
+  id           String   @id @default(uuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name         String
+  price        Int
+  maxQuantity  Int
+  soldQuantity Int      @default(0)
+  tickets      Ticket[]
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  buyerName     String
+  buyerEmail    String
+  buyerPhone    String
+  referenceMomo String   @unique
+  totalAmount   Int
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+  tickets       Ticket[]
+}
+
+model Ticket {
+  id         String          @id @default(uuid())
+  orderId    String
+  order      Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   TicketCategory  @relation(fields: [categoryId], references: [id])
+  isUsed     Boolean         @default(false)
+  usedAt     DateTime?
+}
