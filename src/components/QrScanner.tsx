@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import QrScannerLib from "qr-scanner";
 import { validateTicketEntry } from "@/actions/tickets";
 import { Check, X, AlertTriangle, ScanLine, CameraOff, ShieldAlert } from "lucide-react";
 
 type Step = "init" | "scanning" | "success" | "used" | "invalid";
+
+type ScanResult = {
+  step: Step;
+  buyer?: string;
+  category?: string;
+  date?: string;
+  message: string;
+};
+
 type CamError = { type: string; message: string } | null;
 
 function useSound() {
@@ -38,26 +47,20 @@ function useSound() {
   };
 }
 
-type ScanResult = {
-  step: Step;
-  buyer?: string;
-  category?: string;
-  date?: string;
-  message: string;
-};
-
-function camErrorToMessage(err: DOMException): string {
-  console.log("Camera error:", err.name, err.message);
-  switch (err.name) {
-    case "NotAllowedError":
-      return "Permission caméra refusée. Va dans les réglages du site (icône cadenas) et autorise la caméra.";
-    case "NotFoundError":
-      return "Aucune caméra détectée sur cet appareil.";
-    case "NotReadableError":
-      return "La caméra est déjà utilisée par une autre application.";
-    default:
-      return `${err.name}: ${err.message}`;
+function camErrorToMessage(err: Error): string {
+  const name = ("name" in err ? (err as DOMException).name : null) || "Error";
+  const msg = err.message || "Erreur inconnue";
+  console.log("Camera error:", name, msg);
+  if (name === "NotAllowedError") {
+    return "Permission caméra refusée. Va dans les réglages du site (icône cadenas) et autorise la caméra.";
   }
+  if (name === "NotFoundError") {
+    return "Aucune caméra détectée sur cet appareil.";
+  }
+  if (name === "NotReadableError") {
+    return "La caméra est déjà utilisée par une autre application.";
+  }
+  return `${name}: ${msg}`;
 }
 
 export function QrScanner() {
@@ -67,31 +70,19 @@ export function QrScanner() {
   const [momoRef, setMomoRef] = useState("");
   const [httpsWarning, setHttpsWarning] = useState(false);
 
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
-  const initGuard = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scannerRef = useRef<QrScannerLib | null>(null);
   const sound = useSound();
 
   useEffect(() => {
-    console.log("QrScanner: component mounted");
     if (typeof window !== "undefined" && window.location.protocol !== "https:" && !window.location.hostname.includes("localhost")) {
-      console.log("QrScanner: non-HTTPS context detected");
       setHttpsWarning(true);
     }
-    return () => {
-      console.log("QrScanner: component unmounting, clearing scanner");
-      if (scannerRef.current) {
-        try { scannerRef.current.clear(); } catch (e) { console.log("Clear error on unmount:", e); }
-        scannerRef.current = null;
-      }
-      initGuard.current = false;
-    };
   }, []);
 
   const processToken = useCallback(async (token: string) => {
     console.log("processToken:", token.slice(0, 16) + "...");
-    if (scannerRef.current) {
-      try { await scannerRef.current.pause(true); } catch {}
-    }
+    scannerRef.current?.stop();
     try {
       const res = await validateTicketEntry(token);
       console.log("processToken result:", res.status);
@@ -112,66 +103,76 @@ export function QrScanner() {
     }
   }, [sound]);
 
-  const startCamera = useCallback(async () => {
-    console.log("startCamera: initializing scanner...");
-    setCamError(null);
+  const onDecodeRef = useRef(processToken);
+  onDecodeRef.current = processToken;
 
-    if (initGuard.current) {
-      console.log("startCamera: initGuard already true, skipping");
-      return;
-    }
+  const onDecodeErrorRef = useRef<(err: Error | string) => void>(() => {});
+  onDecodeErrorRef.current = (error) => {
+      if (error !== QrScannerLib.NO_QR_CODE_FOUND) {
+        console.log("Scanner error:", error);
+      }
+  };
+  const initGuard = useRef(false);
+
+  useEffect(() => {
+    if (initGuard.current) return;
     initGuard.current = true;
 
-    const el = document.getElementById("qr-reader");
-    if (el) { el.innerHTML = ""; }
-
-    if (scannerRef.current) {
-      try { scannerRef.current.clear(); } catch {}
+    if (!videoRef.current) {
+      console.log("QrScanner: videoRef not ready yet");
+      return;
     }
 
-    console.log("startCamera: creating Html5QrcodeScanner...");
-    const scanner = new Html5QrcodeScanner(
-      "qr-reader",
-      {
-        fps: 10,
-        qrbox: { width: 280, height: 280 },
-        rememberLastUsedCamera: true,
-        showTorchButtonIfSupported: true,
-        aspectRatio: 1,
+    const scanner = new QrScannerLib(
+      videoRef.current,
+      (res) => {
+        onDecodeRef.current(res.data);
       },
-      false
+      {
+        preferredCamera: "environment",
+        returnDetailedScanResult: true,
+        highlightScanRegion: true,
+        highlightCodeOutline: true,
+        onDecodeError: (error) => {
+          onDecodeErrorRef.current(error);
+        },
+      }
     );
 
     scannerRef.current = scanner;
+    console.log("QrScanner: scanner instance created");
+
+    return () => {
+      console.log("QrScanner: cleanup");
+      scanner.stop();
+      scanner.destroy();
+      scannerRef.current = null;
+      initGuard.current = false;
+    };
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    console.log("startCamera: starting scanner...");
+    setCamError(null);
+    if (!scannerRef.current) return;
 
     try {
-      scanner.render(
-        (decoded) => {
-          console.log("QR decoded:", decoded.slice(0, 16) + "...");
-          if (decoded) processToken(decoded);
-        },
-        (errMsg) => {
-          console.log("Scanner error callback:", errMsg);
-          if (errMsg && !camError) {
-            setCamError({ type: "ScannerError", message: typeof errMsg === "string" ? errMsg : "Erreur de balayage" });
-          }
-        }
-      );
-      console.log("startCamera: scanner.render succeeded");
+      await scannerRef.current.start();
+      console.log("startCamera: scanner started successfully");
       setStep("scanning");
     } catch (err) {
-      console.log("startCamera: scanner.render threw:", err);
-      setCamError({ type: "InitError", message: `Initialisation du scanner échouée: ${err}` });
+      console.log("startCamera failed:", err);
+      const error = err instanceof Error ? err : new Error(String(err));
+      const msg = camErrorToMessage(error);
+      setCamError({ type: err instanceof DOMException ? err.name : "Unknown", message: msg });
     }
-  }, [processToken]);
+  }, []);
 
   const handleMomoManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!momoRef.trim()) return;
 
-    if (scannerRef.current) {
-      try { await scannerRef.current.pause(true); } catch {}
-    }
+    scannerRef.current?.stop();
 
     try {
       const res = await validateTicketEntry(momoRef.trim());
@@ -197,14 +198,9 @@ export function QrScanner() {
     setResult(null);
     setMomoRef("");
     setCamError(null);
-    initGuard.current = false;
-    if (scannerRef.current) {
-      try { scannerRef.current.clear(); } catch {}
-      scannerRef.current = null;
-    }
   };
 
-  const isResultView = step !== "init" && step !== "scanning" && result;
+  const isResultView = result && step !== "init" && step !== "scanning";
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
@@ -275,7 +271,15 @@ export function QrScanner() {
               {step === "scanning" && !camError && (
                 <>
                   <div className="w-full max-w-sm">
-                    <div id="qr-reader" className="w-full min-h-[300px] rounded-2xl overflow-hidden border-2 border-amber-500/30" />
+                    <div className="w-full min-h-[300px] rounded-2xl overflow-hidden border-2 border-amber-500/30 bg-black">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover min-h-[300px]"
+                      />
+                    </div>
                   </div>
                   <p className="text-slate-400 text-sm mt-4 text-center">Placez le QR code dans le cadre</p>
                 </>
@@ -368,9 +372,6 @@ export function QrScanner() {
         .animate-fade-in-up {
           animation: fade-in-up 0.3s ease-out;
         }
-        #qr-reader video { border-radius: 1rem !important; }
-        #qr-reader img[alt="Info icon"] { display: none; }
-        #qr-reader span { display: none; }
       `}</style>
     </div>
   );
