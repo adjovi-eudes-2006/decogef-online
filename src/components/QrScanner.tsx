@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { validateTicketEntry } from "@/actions/tickets";
-import { Check, X, AlertTriangle, ScanLine } from "lucide-react";
+import { Check, X, AlertTriangle, ScanLine, CameraOff, ShieldAlert } from "lucide-react";
 
-type DisplayState = "scanning" | "success" | "used" | "invalid";
+type Step = "init" | "scanning" | "success" | "used" | "invalid";
+type CamError = { type: string; message: string } | null;
 
 function useSound() {
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -38,51 +39,108 @@ function useSound() {
 }
 
 type ScanResult = {
-  status: DisplayState;
+  step: Step;
   buyer?: string;
   category?: string;
   date?: string;
   message: string;
 };
 
+function camErrorToMessage(err: DOMException): string {
+  console.log("Camera error:", err.name, err.message);
+  switch (err.name) {
+    case "NotAllowedError":
+      return "Permission caméra refusée. Va dans les réglages du site (icône cadenas) et autorise la caméra.";
+    case "NotFoundError":
+      return "Aucune caméra détectée sur cet appareil.";
+    case "NotReadableError":
+      return "La caméra est déjà utilisée par une autre application.";
+    default:
+      return `${err.name}: ${err.message}`;
+  }
+}
+
 export function QrScanner() {
+  const [step, setStep] = useState<Step>("init");
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [camError, setCamError] = useState<CamError>(null);
   const [momoRef, setMomoRef] = useState("");
+  const [httpsWarning, setHttpsWarning] = useState(false);
+
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
-  const mountedRef = useRef(false);
+  const initGuard = useRef(false);
   const sound = useSound();
 
-  const processToken = useCallback(async (token: string) => {
-    if (scannerRef.current) {
-      try { scannerRef.current.pause(true); } catch {}
+  useEffect(() => {
+    console.log("QrScanner: component mounted");
+    if (typeof window !== "undefined" && window.location.protocol !== "https:" && !window.location.hostname.includes("localhost")) {
+      console.log("QrScanner: non-HTTPS context detected");
+      setHttpsWarning(true);
     }
+    return () => {
+      console.log("QrScanner: component unmounting, clearing scanner");
+      if (scannerRef.current) {
+        try { scannerRef.current.clear(); } catch (e) { console.log("Clear error on unmount:", e); }
+        scannerRef.current = null;
+      }
+      initGuard.current = false;
+    };
+  }, []);
 
+  const processToken = useCallback(async (token: string) => {
+    console.log("processToken:", token.slice(0, 16) + "...");
+    if (scannerRef.current) {
+      try { await scannerRef.current.pause(true); } catch {}
+    }
     try {
       const res = await validateTicketEntry(token);
+      console.log("processToken result:", res.status);
       if (res.status === "SUCCESS") {
-        setResult({ status: "success", buyer: res.buyer, category: res.category, message: "Accès autorisé" });
+        setResult({ step: "success", buyer: res.buyer, category: res.category, message: "Accès autorisé" });
         sound.success();
       } else if (res.status === "ALREADY_USED") {
-        setResult({ status: "used", buyer: res.buyer, category: res.category, date: res.date, message: "ALERTE : BILLET DÉJÀ UTILISÉ" });
+        setResult({ step: "used", buyer: res.buyer, category: res.category, date: res.date, message: "ALERTE : BILLET DÉJÀ UTILISÉ" });
         sound.error();
       } else {
-        setResult({ status: "invalid", message: "FAUX BILLET / NON RECONNU" });
+        setResult({ step: "invalid", message: "FAUX BILLET / NON RECONNU" });
         sound.error();
       }
-    } catch {
-      setResult({ status: "invalid", message: "Erreur de vérification" });
+    } catch (e) {
+      console.log("processToken catch:", e);
+      setResult({ step: "invalid", message: "Erreur de vérification" });
       sound.error();
     }
   }, [sound]);
 
-  const initScanner = useCallback(() => {
+  const startCamera = useCallback(async () => {
+    console.log("startCamera: requesting permission...");
+    setCamError(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      console.log("Camera permission granted, stream obtained");
+      stream.getTracks().forEach((t) => t.stop());
+    } catch (err) {
+      console.log("Camera permission denied/failed:", err);
+      const msg = camErrorToMessage(err as DOMException);
+      setCamError({ type: (err as DOMException).name, message: msg });
+      return;
+    }
+
+    if (initGuard.current) {
+      console.log("startCamera: initGuard already true, skipping");
+      return;
+    }
+    initGuard.current = true;
+
     const el = document.getElementById("qr-reader");
-    if (el) el.innerHTML = "";
+    if (el) { el.innerHTML = ""; }
 
     if (scannerRef.current) {
       try { scannerRef.current.clear(); } catch {}
     }
 
+    console.log("startCamera: creating Html5QrcodeScanner...");
     const scanner = new Html5QrcodeScanner(
       "qr-reader",
       {
@@ -96,56 +154,65 @@ export function QrScanner() {
     );
 
     scannerRef.current = scanner;
-    scanner.render(
-      (decoded) => { if (mountedRef.current) processToken(decoded); },
-      () => {}
-    );
+
+    try {
+      scanner.render(
+        (decoded) => {
+          console.log("QR decoded:", decoded.slice(0, 16) + "...");
+          processToken(decoded);
+        },
+        (err) => {
+          console.log("Scanner error callback:", err);
+        }
+      );
+      console.log("startCamera: scanner.render succeeded");
+      setStep("scanning");
+    } catch (err) {
+      console.log("startCamera: scanner.render threw:", err);
+      setCamError({ type: "InitError", message: `Initialisation du scanner échouée: ${err}` });
+    }
   }, [processToken]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    initScanner();
-
-    return () => {
-      mountedRef.current = false;
-      if (scannerRef.current) {
-        try { scannerRef.current.clear(); } catch {}
-        scannerRef.current = null;
-      }
-    };
-  }, [initScanner]);
 
   const handleMomoManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!momoRef.trim()) return;
 
     if (scannerRef.current) {
-      try { scannerRef.current.pause(true); } catch {}
+      try { await scannerRef.current.pause(true); } catch {}
     }
 
     try {
       const res = await validateTicketEntry(momoRef.trim());
       if (res.status === "SUCCESS") {
-        setResult({ status: "success", buyer: res.buyer, category: res.category, message: "Accès autorisé" });
+        setResult({ step: "success", buyer: res.buyer, category: res.category, message: "Accès autorisé" });
         sound.success();
       } else if (res.status === "ALREADY_USED") {
-        setResult({ status: "used", buyer: res.buyer, category: res.category, date: res.date, message: "ALERTE : BILLET DÉJÀ UTILISÉ" });
+        setResult({ step: "used", buyer: res.buyer, category: res.category, date: res.date, message: "ALERTE : BILLET DÉJÀ UTILISÉ" });
         sound.error();
       } else {
-        setResult({ status: "invalid", message: "FAUX BILLET / NON RECONNU" });
+        setResult({ step: "invalid", message: "FAUX BILLET / NON RECONNU" });
         sound.error();
       }
     } catch {
-      setResult({ status: "invalid", message: "Erreur de vérification" });
+      setResult({ step: "invalid", message: "Erreur de vérification" });
       sound.error();
     }
   };
 
   const next = () => {
+    console.log("next: resetting scanner");
+    setStep("init");
     setResult(null);
     setMomoRef("");
-    initScanner();
+    setCamError(null);
+    initGuard.current = false;
+    if (scannerRef.current) {
+      try { scannerRef.current.clear(); } catch {}
+      scannerRef.current = null;
+    }
   };
+
+  const isResultView = step !== "init" && step !== "scanning" && result;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
@@ -157,17 +224,73 @@ export function QrScanner() {
         <span className="text-xs text-slate-500 uppercase tracking-widest">Contrôle d&apos;accès</span>
       </header>
 
-      <div className="flex-1 flex flex-col">
-        {!result && (
+      {httpsWarning && (
+        <div className="mx-4 mt-4 px-4 py-3 rounded-xl bg-red-600/20 border border-red-500/30 text-red-400 text-sm flex items-center gap-3">
+          <ShieldAlert className="w-5 h-5 flex-shrink-0" />
+          <span>La caméra nécessite une connexion HTTPS sécurisée. Ouvre cette page via HTTPS ou localhost.</span>
+        </div>
+      )}
+
+      {camError && (
+        <div className="mx-4 mt-4 px-4 py-3 rounded-xl bg-red-600/20 border border-red-500/30 text-red-400 text-sm">
+          <p className="font-bold mb-1">Erreur caméra</p>
+          <p>{camError.message}</p>
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col px-4 py-4">
+        {!isResultView && (
           <>
-            <div className="flex-1 flex flex-col items-center justify-center px-4 py-4">
-              <div className="w-full max-w-sm">
-                <div id="qr-reader" className="w-full rounded-2xl overflow-hidden border-2 border-amber-500/30 min-h-[300px]" />
-              </div>
-              <p className="text-slate-400 text-sm mt-3 text-center">Placez le QR code dans le cadre</p>
+            <div className="flex-1 flex flex-col items-center justify-center">
+              {step === "init" && !camError && (
+                <div className="text-center space-y-6">
+                  <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center mx-auto">
+                    <CameraOff className="w-10 h-10 text-slate-500" />
+                  </div>
+                  <p className="text-slate-400 text-sm">Appuie sur le bouton pour activer la caméra</p>
+                  <button
+                    onClick={startCamera}
+                    className="px-8 py-4 rounded-2xl bg-amber-600 text-white font-bold text-base shadow-lg shadow-amber-600/25 active:scale-95 transition-transform"
+                  >
+                    Activer la caméra
+                  </button>
+                </div>
+              )}
+
+              {camError && (
+                <div className="text-center space-y-6">
+                  <div className="w-24 h-24 rounded-full bg-red-900/30 border-2 border-dashed border-red-700 flex items-center justify-center mx-auto">
+                    <CameraOff className="w-10 h-10 text-red-500" />
+                  </div>
+                  <p className="text-slate-400 text-sm max-w-xs">{camError.message}</p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={startCamera}
+                      className="px-6 py-3 rounded-xl bg-amber-600 text-white font-bold text-sm active:scale-95 transition-transform"
+                    >
+                      Réessayer
+                    </button>
+                    <button
+                      onClick={() => setCamError(null)}
+                      className="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 font-medium text-sm active:scale-95 transition-transform"
+                    >
+                      Ignorer
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === "scanning" && !camError && (
+                <>
+                  <div className="w-full max-w-sm">
+                    <div id="qr-reader" className="w-full min-h-[300px] rounded-2xl overflow-hidden border-2 border-amber-500/30" />
+                  </div>
+                  <p className="text-slate-400 text-sm mt-4 text-center">Placez le QR code dans le cadre</p>
+                </>
+              )}
             </div>
 
-            <div className="px-4 pb-6 border-t border-slate-800 pt-4">
+            <div className="pt-4 pb-2 border-t border-slate-800 mt-auto">
               <form onSubmit={handleMomoManual} className="max-w-sm mx-auto space-y-3">
                 <p className="text-xs text-slate-500 text-center">Caméra indisponible ? Valider par Référence MoMo</p>
                 <div className="flex gap-2">
@@ -175,7 +298,7 @@ export function QrScanner() {
                     type="text"
                     value={momoRef}
                     onChange={(e) => setMomoRef(e.target.value)}
-                    placeholder="Référence MTN MoMo"
+                    placeholder="Référence MTN MoMo ou token"
                     className="flex-1 px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder:text-slate-600 focus:border-amber-500 focus:outline-none text-sm"
                   />
                   <button
@@ -191,8 +314,8 @@ export function QrScanner() {
           </>
         )}
 
-        {result?.status === "success" && (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in-up">
+        {result?.step === "success" && (
+          <div className="flex-1 flex flex-col items-center justify-center animate-fade-in-up">
             <div className="w-full max-w-sm bg-emerald-600 rounded-3xl p-8 text-center shadow-xl shadow-emerald-600/30">
               <div className="w-20 h-20 mx-auto rounded-full bg-emerald-400/20 flex items-center justify-center mb-5">
                 <Check className="w-10 h-10 text-emerald-200" />
@@ -208,8 +331,8 @@ export function QrScanner() {
           </div>
         )}
 
-        {result?.status === "used" && (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in-up">
+        {result?.step === "used" && (
+          <div className="flex-1 flex flex-col items-center justify-center animate-fade-in-up">
             <div className="w-full max-w-sm bg-yellow-600 rounded-3xl p-8 text-center shadow-xl shadow-yellow-600/30">
               <div className="w-20 h-20 mx-auto rounded-full bg-yellow-400/20 flex items-center justify-center mb-5">
                 <AlertTriangle className="w-10 h-10 text-yellow-200" />
@@ -228,8 +351,8 @@ export function QrScanner() {
           </div>
         )}
 
-        {result?.status === "invalid" && (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in-up">
+        {result?.step === "invalid" && (
+          <div className="flex-1 flex flex-col items-center justify-center animate-fade-in-up">
             <div className="w-full max-w-sm bg-red-600 rounded-3xl p-8 text-center shadow-xl shadow-red-600/30">
               <div className="w-20 h-20 mx-auto rounded-full bg-red-400/20 flex items-center justify-center mb-5">
                 <X className="w-10 h-10 text-red-200" />
