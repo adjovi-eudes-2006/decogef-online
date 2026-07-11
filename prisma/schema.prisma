@@ -55,3 +55,13 @@ model Ticket {
   isUsed       Boolean         @default(false)
   usedAt       DateTime?
 }
+
+model IncomingSmsLog {
+  id           String    @id @default(uuid())
+  rawText      String    @db.Text
+  parsedAmount Int?
+  parsedRef    String?
+  matched      Boolean   @default(false)
+  orderId      String?
+  receivedAt   DateTime  @default(now())
+}

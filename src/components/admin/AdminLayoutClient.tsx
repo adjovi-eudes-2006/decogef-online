@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAdmin } from "@/actions/auth";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Plus, ScanQrCode, LogOut, Menu, X, Ticket } from "lucide-react";
+import { LayoutDashboard, Plus, ScanQrCode, MessageSquare, LogOut, Menu, X, Ticket } from "lucide-react";
 
 export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -22,6 +22,7 @@ export function AdminLayoutClient({ children }: { children: React.ReactNode }) {
     { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/events/new", label: "Nouvel événement", icon: Plus },
     { href: "/admin/scan", label: "Scanner", icon: ScanQrCode },
+    { href: "/admin/sms-logs", label: "SMS reçus", icon: MessageSquare },
   ];
 
   const isActive = (href: string) => pathname.startsWith(href);
