@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyAdminSessionOrThrow } from "@/lib/admin-auth";
 import { eventSchema } from "@/lib/validations";
 import { revalidatePath } from "next/cache";
-import type { DashboardData, OrderData } from "@/types";
+import type { DashboardData, OrderData, EventSummary } from "@/types";
 
 export async function createEvent(
   formData: FormData
@@ -215,6 +215,22 @@ export async function getDashboardData(): Promise<DashboardData | null> {
 
     const eventCount = await prisma.event.count();
 
+    const rawEvents = await prisma.event.findMany({
+      include: {
+        _count: { select: { orders: true, categories: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const events: EventSummary[] = rawEvents.map((e) => ({
+      id: e.id,
+      title: e.title,
+      date: e.date.toISOString(),
+      location: e.location,
+      totalTickets: e._count.categories,
+      validatedOrders: e._count.orders,
+    }));
+
     return {
       pendingOrders,
       validatedOrders,
@@ -222,9 +238,34 @@ export async function getDashboardData(): Promise<DashboardData | null> {
       totalTicketsSold,
       categoriesStats,
       eventCount,
+      events,
     };
   } catch {
     return null;
+  }
+}
+
+export async function deleteEvent(
+  eventId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await verifyAdminSessionOrThrow();
+
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) return { success: false, error: "Événement introuvable" };
+
+    await prisma.event.delete({ where: { id: eventId } });
+
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/");
+
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("Accès refusé")) {
+      return { success: false, error: error.message };
+    }
+    console.error("Delete event error:", error);
+    return { success: false, error: "Erreur lors de la suppression" };
   }
 }
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { validateOrder, rejectOrder } from "@/actions/admin";
+import { validateOrder, rejectOrder, deleteEvent } from "@/actions/admin";
 import { CheckCircle, XCircle, Clock, Search, DollarSign, Ticket, TrendingUp } from "lucide-react";
 import { formatPrice, formatDateShort } from "@/lib/utils";
 import type { DashboardData } from "@/types";
@@ -96,6 +96,41 @@ export function DashboardContent({ data }: DashboardContentProps) {
           </div>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display text-lg font-bold text-white">
+            Événements ({data.events.length})
+          </h2>
+        </div>
+        <div className="space-y-2">
+          {data.events.length === 0 ? (
+            <p className="text-zinc-500 text-sm py-2">Aucun événement</p>
+          ) : (
+            data.events.map((event) => (
+              <div key={event.id} className="flex items-center justify-between py-3 px-4 rounded-xl bg-zinc-800/30 border border-zinc-800">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-white font-semibold truncate">{event.title}</p>
+                  <p className="text-xs text-zinc-500">
+                    {new Date(event.date).toLocaleDateString("fr-FR")} · {event.location}
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!window.confirm("Attention : suppression irréversible de l'événement et de toutes ses commandes. Confirmer ?")) return;
+                    const result = await deleteEvent(event.id);
+                    if (result.success) router.refresh();
+                    else alert(result.error || "Erreur");
+                  }}
+                  className="ml-3 px-3 py-1.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/40 text-xs font-semibold transition-colors active:scale-95 flex-shrink-0"
+                >
+                  Supprimer
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="p-5 lg:col-span-1">

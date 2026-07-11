@@ -47,6 +47,15 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface EventSummary {
+  id: string;
+  title: string;
+  date: string;
+  location: string;
+  totalTickets: number;
+  validatedOrders: number;
+}
+
 export interface DashboardData {
   pendingOrders: OrderData[];
   validatedOrders: OrderData[];
@@ -54,6 +63,7 @@ export interface DashboardData {
   totalTicketsSold: number;
   categoriesStats: { name: string; sold: number; revenue: number }[];
   eventCount: number;
+  events: EventSummary[];
 }
 
 export interface VerificationResult {
