@@ -1,4 +1,4 @@
-const requiredVars = ["DATABASE_URL", "ADMIN_SECRET_TOKEN", "SMS_WEBHOOK_SECRET"] as const;
+const requiredVars = ["DATABASE_URL", "ADMIN_SECRET_TOKEN"] as const;
 
 let validated = false;
 

@@ -6,8 +6,7 @@ import { parseMomoSms } from "@/lib/parseMomoSms";
 export async function POST(request: NextRequest) {
   const secret = process.env.SMS_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("SMS_WEBHOOK_SECRET not configured");
-    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    return NextResponse.json({ error: "Fonctionnalité SMS automatique désactivée" }, { status: 503 });
   }
 
   const authHeader = request.headers.get("x-webhook-secret");
