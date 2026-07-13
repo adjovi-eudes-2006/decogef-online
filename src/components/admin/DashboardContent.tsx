@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { validateOrder, rejectOrder, deleteEvent } from "@/actions/admin";
-import { CheckCircle, XCircle, Clock, Search, DollarSign, Ticket, TrendingUp } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Search, DollarSign, Ticket, TrendingUp, Pencil } from "lucide-react";
 import { formatPrice, formatDateShort } from "@/lib/utils";
 import type { DashboardData } from "@/types";
 
@@ -115,17 +115,25 @@ export function DashboardContent({ data }: DashboardContentProps) {
                     {new Date(event.date).toLocaleDateString("fr-FR")} · {event.location}
                   </p>
                 </div>
-                <button
-                  onClick={async () => {
-                    if (!window.confirm("Attention : suppression irréversible de l'événement et de toutes ses commandes. Confirmer ?")) return;
-                    const result = await deleteEvent(event.id);
-                    if (result.success) router.refresh();
-                    else alert(result.error || "Erreur");
-                  }}
-                  className="ml-3 px-3 py-1.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/40 text-xs font-semibold transition-colors active:scale-95 flex-shrink-0"
-                >
-                  Supprimer
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                  <a
+                    href={`/admin/events/${event.id}/edit`}
+                    className="px-3 py-1.5 rounded-lg bg-gala-500/20 text-gala-400 hover:bg-gala-500/40 text-xs font-semibold transition-colors active:scale-95 flex items-center gap-1"
+                  >
+                    <Pencil className="w-3 h-3" /> Modifier
+                  </a>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm("Attention : suppression irréversible de l'événement et de toutes ses commandes. Confirmer ?")) return;
+                      const result = await deleteEvent(event.id);
+                      if (result.success) router.refresh();
+                      else alert(result.error || "Erreur");
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/40 text-xs font-semibold transition-colors active:scale-95"
+                  >
+                    Supprimer
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -141,14 +149,6 @@ export function DashboardContent({ data }: DashboardContentProps) {
                 <div className="flex justify-between text-sm mb-1.5">
                   <span className="text-zinc-300 font-medium">{cat.name}</span>
                   <span className="text-zinc-400">{cat.sold} vendus</span>
-                </div>
-                <div className="w-full bg-zinc-800 rounded-full h-2.5">
-                  <div
-                    className="bg-gradient-to-r from-gala-600 to-gala-400 h-2.5 rounded-full transition-all"
-                    style={{
-                      width: `${data.totalTicketsSold > 0 ? (cat.sold / data.totalTicketsSold) * 100 : 0}%`,
-                    }}
-                  />
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">{formatPrice(cat.revenue)}</p>
               </div>

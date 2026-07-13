@@ -195,10 +195,7 @@ export async function createOrder(formData: FormData) {
       const category = event.categories.find((c) => c.id === item.categoryId);
       if (!category) return { success: false, error: `Catégorie introuvable: ${item.categoryId}` };
 
-      const available = category.maxQuantity - category.soldQuantity;
-      if (item.quantity > available) {
-        return { success: false, error: `Stock insuffisant pour ${category.name}. ${available} restante(s)` };
-      }
+
 
       totalAmount += category.price * item.quantity;
       for (let i = 0; i < item.quantity; i++) {

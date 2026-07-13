@@ -55,10 +55,6 @@ export const eventSchema = z.object({
           .number()
           .int("Le prix doit être un nombre entier")
           .positive("Le prix doit être positif"),
-        maxQuantity: z
-          .number()
-          .int("La quantité doit être un nombre entier")
-          .positive("La quantité doit être positive"),
       })
     )
     .min(1, "Ajoutez au moins une catégorie"),

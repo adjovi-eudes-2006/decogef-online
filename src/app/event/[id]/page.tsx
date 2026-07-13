@@ -26,7 +26,6 @@ async function getEvent(id: string) {
       eventId: c.eventId,
       name: c.name,
       price: c.price,
-      maxQuantity: c.maxQuantity,
       soldQuantity: c.soldQuantity,
     })),
   };

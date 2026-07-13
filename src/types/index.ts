@@ -14,7 +14,6 @@ export interface TicketCategoryData {
   eventId: string;
   name: string;
   price: number;
-  maxQuantity: number;
   soldQuantity: number;
 }
 

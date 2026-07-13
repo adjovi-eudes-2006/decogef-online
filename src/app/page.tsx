@@ -23,7 +23,6 @@ async function getEvents(): Promise<EventData[]> {
       eventId: c.eventId,
       name: c.name,
       price: c.price,
-      maxQuantity: c.maxQuantity,
       soldQuantity: c.soldQuantity,
     })),
     createdAt: e.createdAt.toISOString(),

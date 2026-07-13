@@ -20,7 +20,7 @@ export async function createEvent(
     const rawCoverImage = (formData.get("coverImage") as string) || "";
     const rawCategories = formData.get("categories") as string;
 
-    let parsedCategories: { name: string; price: number; maxQuantity: number }[];
+    let parsedCategories: { name: string; price: number }[];
     try {
       parsedCategories = JSON.parse(rawCategories);
     } catch {
@@ -47,7 +47,7 @@ export async function createEvent(
           create: validated.categories.map((cat) => ({
             name: cat.name,
             price: cat.price,
-            maxQuantity: cat.maxQuantity,
+            maxQuantity: null,
           })),
         },
       },
@@ -95,24 +95,6 @@ export async function validateOrder(
         });
       }
 
-      const updatedOrder = await tx.order.findUnique({
-        where: { id: orderId },
-        include: { tickets: { include: { category: true } } },
-      });
-
-      const catCounts: Record<string, number> = {};
-      if (updatedOrder) {
-        for (const t of updatedOrder.tickets) {
-          catCounts[t.categoryId] = (catCounts[t.categoryId] || 0) + 1;
-        }
-      }
-
-      for (const [catId, count] of Object.entries(catCounts)) {
-        await tx.ticketCategory.update({
-          where: { id: catId },
-          data: { soldQuantity: { increment: count } },
-        });
-      }
     });
 
     revalidatePath("/admin/dashboard");
@@ -234,6 +216,89 @@ export async function getDashboardData(): Promise<DashboardData | null> {
     };
   } catch {
     return null;
+  }
+}
+
+export async function updateEvent(
+  eventId: string,
+  formData: FormData
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await verifyAdminSessionOrThrow();
+
+    const title = formData.get("title") as string;
+    const description = (formData.get("description") as string) || "";
+    const date = formData.get("date") as string;
+    const location = formData.get("location") as string;
+    const coverImage = formData.get("coverImage") as string;
+
+    const rawCategories = formData.get("categories") as string;
+    let parsedCategories: { id?: string; name: string; price: number }[];
+    try {
+      parsedCategories = JSON.parse(rawCategories);
+    } catch {
+      return { success: false, error: "Format des catégories invalide" };
+    }
+
+    if (!title || !date || !location) {
+      return { success: false, error: "Champs obligatoires manquants" };
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: { categories: true },
+    });
+
+    if (!event) return { success: false, error: "Événement introuvable" };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.event.update({
+        where: { id: eventId },
+        data: {
+          title,
+          description,
+          date: new Date(date),
+          location,
+          coverImage: coverImage || event.coverImage,
+        },
+      });
+
+      for (const cat of parsedCategories) {
+        if (cat.id) {
+          const existing = event.categories.find((c) => c.id === cat.id);
+          if (existing) {
+            const ticketCount = await tx.ticket.count({
+              where: { categoryId: cat.id, order: { status: "VALIDATED" } },
+            });
+            if (ticketCount > 0) continue;
+            await tx.ticketCategory.update({
+              where: { id: cat.id },
+              data: { name: cat.name, price: cat.price },
+            });
+          }
+        } else {
+          await tx.ticketCategory.create({
+            data: {
+              eventId,
+              name: cat.name,
+              price: cat.price,
+            },
+          });
+        }
+      }
+    });
+
+    revalidatePath("/");
+    revalidatePath("/admin/dashboard");
+    revalidatePath(`/event/${eventId}`);
+
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("Accès refusé")) {
+      return { success: false, error: error.message };
+    }
+    console.error("Update event error:", error);
+    return { success: false, error: "Erreur lors de la modification" };
   }
 }
 

@@ -97,16 +97,6 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const catCounts: Record<string, number> = {};
-      for (const t of matchedOrder!.tickets) {
-        catCounts[t.categoryId] = (catCounts[t.categoryId] || 0) + 1;
-      }
-      for (const [catId, count] of Object.entries(catCounts)) {
-        await tx.ticketCategory.update({
-          where: { id: catId },
-          data: { soldQuantity: { increment: count } },
-        });
-      }
 
       await tx.incomingSmsLog.update({
         where: { id: smsLog.id },

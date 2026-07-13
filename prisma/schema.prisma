@@ -26,7 +26,7 @@ model TicketCategory {
   event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name         String
   price        Int
-  maxQuantity  Int
+  maxQuantity  Int?
   soldQuantity Int      @default(0)
   tickets      Ticket[]
 }

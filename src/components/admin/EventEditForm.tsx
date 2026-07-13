@@ -2,19 +2,44 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createEvent } from "@/actions/admin";
+import { updateEvent } from "@/actions/admin";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { ImagePlus, Plus, Trash2, ArrowLeft } from "lucide-react";
+import { ImagePlus, Plus, Trash2, ArrowLeft, AlertTriangle } from "lucide-react";
 
-export function EventForm() {
+interface CategoryField {
+  id?: string;
+  name: string;
+  price: string;
+}
+
+interface EventEditFormProps {
+  event: {
+    id: string;
+    title: string;
+    description: string;
+    date: string;
+    location: string;
+    coverImage: string;
+    categories: { id: string; name: string; price: number; soldQuantity: number }[];
+  };
+}
+
+export function EventEditForm({ event }: EventEditFormProps) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [imageBase64, setImageBase64] = useState("");
-  const [categories, setCategories] = useState([{ name: "", price: "" }]);
-  const [form, setForm] = useState({ title: "", description: "", date: "", location: "" });
+  const [categories, setCategories] = useState<CategoryField[]>(
+    event.categories.map((c) => ({ id: c.id, name: c.name, price: String(c.price) }))
+  );
+  const [form, setForm] = useState({
+    title: event.title,
+    description: event.description,
+    date: event.date.slice(0, 16),
+    location: event.location,
+  });
   const [error, setError] = useState("");
 
   const addCategory = () => {
@@ -26,9 +51,9 @@ export function EventForm() {
     setCategories(categories.filter((_, i) => i !== idx));
   };
 
-  const updateCategory = (idx: number, field: string, value: string) => {
+  const updateCategory = (idx: number, field: keyof CategoryField, value: string) => {
     const updated = [...categories];
-    updated[idx] = { ...updated[idx], [field]: value };
+    (updated[idx] as any)[field] = value;
     setCategories(updated);
   };
 
@@ -48,18 +73,13 @@ export function EventForm() {
     const parsed = categories
       .filter((c) => c.name.trim() && c.price)
       .map((c) => ({
+        ...(c.id ? { id: c.id } : {}),
         name: c.name.trim(),
         price: parseInt(c.price, 10),
       }));
 
     if (parsed.length === 0) {
       setError("Ajoutez au moins une catégorie valide");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!form.title || !form.date || !form.location) {
-      setError("Remplissez tous les champs obligatoires");
       setIsLoading(false);
       return;
     }
@@ -72,7 +92,7 @@ export function EventForm() {
     fd.append("coverImage", imageBase64);
     fd.append("categories", JSON.stringify(parsed));
 
-    const result = await createEvent(fd);
+    const result = await updateEvent(event.id, fd);
     setIsLoading(false);
 
     if (result.success) {
@@ -83,6 +103,8 @@ export function EventForm() {
     }
   };
 
+  const hasSoldCategories = event.categories.some((c) => c.soldQuantity > 0);
+
   return (
     <div className="max-w-2xl mx-auto">
       <button
@@ -92,7 +114,16 @@ export function EventForm() {
         <ArrowLeft className="w-4 h-4" /> Retour
       </button>
 
-      <h1 className="font-display text-3xl font-bold text-white mb-8">Créer un événement</h1>
+      <h1 className="font-display text-3xl font-bold text-white mb-2">Modifier l&apos;événement</h1>
+
+      {hasSoldCategories && (
+        <div className="flex items-start gap-3 bg-amber-600/15 border border-amber-500/30 rounded-xl px-5 py-4 mb-6">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-300">
+            Des tickets ont déjà été vendus pour certaines catégories. Leurs noms et prix ne peuvent pas être modifiés.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="p-6 space-y-5">
@@ -137,12 +168,14 @@ export function EventForm() {
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-1.5">Image de couverture</label>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
-            {imageBase64 ? (
+            {(imageBase64 || event.coverImage) ? (
               <div className="relative rounded-xl overflow-hidden">
-                <img src={imageBase64} alt="Aperçu" className="w-full h-48 object-cover" />
-                <button type="button" onClick={() => setImageBase64("")} className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <img src={imageBase64 || event.coverImage} alt="Aperçu" className="w-full h-48 object-cover" />
+                {imageBase64 && (
+                  <button type="button" onClick={() => setImageBase64("")} className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ) : (
               <button type="button" onClick={() => fileRef.current?.click()} className="w-full h-36 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-gala-500 hover:text-gala-400 transition-all">
@@ -161,22 +194,41 @@ export function EventForm() {
             </Button>
           </div>
 
-          {categories.map((cat, idx) => (
-            <div key={idx} className="bg-zinc-800/50 border border-zinc-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-500 font-medium">Catégorie #{idx + 1}</span>
-                {categories.length > 1 && (
-                  <button type="button" onClick={() => removeCategory(idx)} className="text-red-400 hover:text-red-300">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+          {categories.map((cat, idx) => {
+            const original = event.categories.find((c) => c.id === cat.id);
+            const isLocked = original ? original.soldQuantity > 0 : false;
+
+            return (
+              <div key={idx} className={`rounded-xl p-4 space-y-3 ${isLocked ? "bg-zinc-800/20 border border-zinc-800/50 opacity-60" : "bg-zinc-800/50 border border-zinc-800"}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-500 font-medium">Catégorie #{idx + 1}</span>
+                  {categories.length > 1 && !isLocked && (
+                    <button type="button" onClick={() => removeCategory(idx)} className="text-red-400 hover:text-red-300">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    placeholder="Nom (ex: VIP)"
+                    value={cat.name}
+                    onChange={(e) => updateCategory(idx, "name", e.target.value)}
+                    disabled={isLocked}
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Prix (FCFA)"
+                    value={cat.price}
+                    onChange={(e) => updateCategory(idx, "price", e.target.value)}
+                    disabled={isLocked}
+                  />
+                </div>
+                {isLocked && (
+                  <p className="text-xs text-zinc-600">{original!.soldQuantity} ticket(s) vendu(s) — verrouillé</p>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="Nom (ex: VIP)" value={cat.name} onChange={(e) => updateCategory(idx, "name", e.target.value)} />
-                <Input type="number" placeholder="Prix (FCFA)" value={cat.price} onChange={(e) => updateCategory(idx, "price", e.target.value)} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </Card>
 
         {error && (
@@ -186,7 +238,7 @@ export function EventForm() {
         )}
 
         <Button type="submit" fullWidth variant="gold" isLoading={isLoading}>
-          Créer l'événement
+          Enregistrer les modifications
         </Button>
       </form>
     </div>

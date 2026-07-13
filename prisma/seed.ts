@@ -56,7 +56,6 @@ async function main() {
       eventId: event.id,
       name: "Pass Standard",
       price: 5000,
-      maxQuantity: 150,
     },
   });
 
@@ -65,7 +64,6 @@ async function main() {
       eventId: event.id,
       name: "Pass VIP",
       price: 15000,
-      maxQuantity: 50,
     },
   });
 
@@ -74,7 +72,6 @@ async function main() {
       eventId: event.id,
       name: "Table Prestige (8 personnes)",
       price: 100000,
-      maxQuantity: 10,
     },
   });
 
