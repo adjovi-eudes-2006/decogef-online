@@ -14,9 +14,23 @@
 }
 
 @media print {
+  @page { margin: 0.5in; size: landscape; }
+  body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
   .print-area { position: absolute; left: 0; top: 0; width: 100%; }
   .print-area canvas { display: block !important; }
+  .print-area .bg-zinc-950 { background: #0a0a0a !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .print-area .bg-zinc-900\/50 { background: rgba(24,24,27,0.5) !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .print-area .bg-white { background: white !important; }
+  .print-area .border-amber-500\/40 { border-color: rgba(212,175,55,0.4) !important; }
+  .print-area .text-amber-400 { color: #D4AF37 !important; }
+  .print-area .text-amber-400\/80 { color: rgba(212,175,55,0.8) !important; }
+  .print-area .text-amber-400\/60 { color: rgba(212,175,55,0.6) !important; }
+  .print-area .text-amber-400\/70 { color: rgba(212,175,55,0.7) !important; }
+  .print-area .text-amber-400\/40 { color: rgba(212,175,55,0.4) !important; }
+  .print-area .from-amber-500\/60,
+  .print-area .via-amber-500\/40,
+  .print-area .to-amber-500\/60 { opacity: 0.6 !important; }
   .no-print { display: none !important; }
 }
