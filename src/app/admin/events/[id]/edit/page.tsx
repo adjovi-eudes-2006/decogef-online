@@ -30,6 +30,7 @@ export default async function EditEventPage({ params }: Props) {
         date: event.date.toISOString(),
         location: event.location,
         coverImage: event.coverImage,
+        ticketBackgroundUrl: event.ticketBackgroundUrl,
         categories: event.categories.map((c) => ({
           id: c.id,
           name: c.name,

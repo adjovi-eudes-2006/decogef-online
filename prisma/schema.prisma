@@ -14,8 +14,9 @@ model Event {
   description String           @db.Text
   date        DateTime
   location    String
-  coverImage  String           @db.Text
-  categories  TicketCategory[]
+  coverImage           String           @db.Text
+  ticketBackgroundUrl  String?
+  categories           TicketCategory[]
   orders      Order[]
   createdAt   DateTime         @default(now())
 }

@@ -22,15 +22,18 @@ interface EventEditFormProps {
     date: string;
     location: string;
     coverImage: string;
+    ticketBackgroundUrl?: string | null;
     categories: { id: string; name: string; price: number; soldQuantity: number }[];
   };
 }
 
 export function EventEditForm({ event }: EventEditFormProps) {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [imageBase64, setImageBase64] = useState("");
+  const [ticketBgBase64, setTicketBgBase64] = useState("");
   const [categories, setCategories] = useState<CategoryField[]>(
     event.categories.map((c) => ({ id: c.id, name: c.name, price: String(c.price) }))
   );
@@ -90,6 +93,7 @@ export function EventEditForm({ event }: EventEditFormProps) {
     fd.append("date", form.date);
     fd.append("location", form.location);
     fd.append("coverImage", imageBase64);
+    fd.append("ticketBackgroundUrl", ticketBgBase64);
     fd.append("categories", JSON.stringify(parsed));
 
     const result = await updateEvent(event.id, fd);
@@ -165,24 +169,51 @@ export function EventEditForm({ event }: EventEditFormProps) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Image de couverture</label>
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
-            {(imageBase64 || event.coverImage) ? (
-              <div className="relative rounded-xl overflow-hidden">
-                <img src={imageBase64 || event.coverImage} alt="Aperçu" className="w-full h-48 object-cover" />
-                {imageBase64 && (
-                  <button type="button" onClick={() => setImageBase64("")} className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileRef.current?.click()} className="w-full h-36 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-gala-500 hover:text-gala-400 transition-all">
-                <ImagePlus className="w-8 h-8" />
-                <span className="text-sm">Charger une image (convertie en Base64)</span>
-              </button>
-            )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Image de couverture</label>
+              <input ref={coverFileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+              {(imageBase64 || event.coverImage) ? (
+                <div className="relative rounded-xl overflow-hidden">
+                  <img src={imageBase64 || event.coverImage} alt="Aperçu" className="w-full h-36 object-cover" />
+                  {imageBase64 && (
+                    <button type="button" onClick={() => setImageBase64("")} className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button type="button" onClick={() => coverFileRef.current?.click()} className="w-full h-36 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-gala-500 hover:text-gala-400 transition-all">
+                  <ImagePlus className="w-8 h-8" />
+                  <span className="text-sm">Couverture</span>
+                </button>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1.5">Image de fond du billet</label>
+              <input ref={bgFileRef} type="file" accept="image/*" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => setTicketBgBase64(ev.target?.result as string);
+                reader.readAsDataURL(file);
+              }} className="hidden" />
+              {(ticketBgBase64 || event.ticketBackgroundUrl) ? (
+                <div className="relative rounded-xl overflow-hidden">
+                  <img src={ticketBgBase64 || event.ticketBackgroundUrl!} alt="Aperçu fond billet" className="w-full h-36 object-cover" />
+                  {ticketBgBase64 && (
+                    <button type="button" onClick={() => setTicketBgBase64("")} className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button type="button" onClick={() => bgFileRef.current?.click()} className="w-full h-36 rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-gala-500 hover:text-gala-400 transition-all">
+                  <ImagePlus className="w-8 h-8" />
+                  <span className="text-sm">Fond billet</span>
+                </button>
+              )}
+            </div>
           </div>
         </Card>
 

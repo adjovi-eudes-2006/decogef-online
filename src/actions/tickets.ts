@@ -140,6 +140,7 @@ export async function getOrderById(orderId: string) {
       eventTitle: order.event.title,
       eventDate: order.event.date.toISOString(),
       eventLocation: order.event.location,
+      ticketBackgroundUrl: order.event.ticketBackgroundUrl ?? undefined,
       createdAt: order.createdAt.toISOString(),
     };
   } catch {

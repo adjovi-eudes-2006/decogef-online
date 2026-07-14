@@ -18,6 +18,7 @@ export async function createEvent(
     const rawDate = formData.get("date") as string;
     const rawLocation = formData.get("location") as string;
     const rawCoverImage = (formData.get("coverImage") as string) || "";
+    const rawTicketBackgroundUrl = (formData.get("ticketBackgroundUrl") as string) || "";
     const rawCategories = formData.get("categories") as string;
 
     let parsedCategories: { name: string; price: number }[];
@@ -43,6 +44,7 @@ export async function createEvent(
         date: new Date(validated.date),
         location: validated.location,
         coverImage: validated.coverImage || "",
+        ticketBackgroundUrl: rawTicketBackgroundUrl || null,
         categories: {
           create: validated.categories.map((cat) => ({
             name: cat.name,
@@ -231,6 +233,7 @@ export async function updateEvent(
     const date = formData.get("date") as string;
     const location = formData.get("location") as string;
     const coverImage = formData.get("coverImage") as string;
+    const rawTicketBackgroundUrl = (formData.get("ticketBackgroundUrl") as string) || "";
 
     const rawCategories = formData.get("categories") as string;
     let parsedCategories: { id?: string; name: string; price: number }[];
@@ -260,6 +263,7 @@ export async function updateEvent(
           date: new Date(date),
           location,
           coverImage: coverImage || event.coverImage,
+          ticketBackgroundUrl: rawTicketBackgroundUrl || event.ticketBackgroundUrl,
         },
       });
 
