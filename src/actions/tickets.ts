@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminSessionOrThrow } from "@/lib/admin-auth";
 import { orderSchema } from "@/lib/validations";
+import { sendNewOrderNotification } from "@/lib/email";
 import type { VerificationResult } from "@/types";
 
 export async function validateTicketEntry(
@@ -226,6 +227,17 @@ export async function createOrder(formData: FormData) {
           })),
         },
       },
+    });
+
+    sendNewOrderNotification({
+      id: order.id,
+      buyerName: validated.buyerName,
+      buyerPhone: validated.buyerPhone,
+      buyerEmail: validated.buyerEmail,
+      referenceMomo: validated.referenceMomo,
+      totalAmount,
+      eventTitle: event.title,
+      ticketCount: ticketEntries.length,
     });
 
     return { success: true, orderId: order.id };
