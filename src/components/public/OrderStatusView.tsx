@@ -76,9 +76,9 @@ function TicketCard({
         <div className="relative z-10">
           <CornerOrnaments />
 
-          <div className="flex flex-col sm:flex-row">
+          <div className="flex flex-col sm:flex-row gap-0 sm:gap-x-4 md:gap-x-6">
             {/* TOP / LEFT — INFO SECTION */}
-            <div className="flex-1 p-5 sm:p-6 md:p-8 relative overflow-hidden">
+            <div className="flex-1 p-5 sm:p-6 md:p-7 relative overflow-hidden">
               <div className="absolute inset-0 opacity-[0.03]">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-amber-400 blur-3xl" />
               </div>
@@ -91,9 +91,9 @@ function TicketCard({
                 </h2>
                 <p className="text-amber-400/80 text-xs sm:text-sm font-display italic mt-1">{ticket.categoryName}</p>
 
-                <div className="w-10 sm:w-12 h-px bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto my-4 sm:my-5" />
+                <div className="w-10 sm:w-12 h-px bg-gradient-to-r from-transparent via-amber-500 to-transparent mx-auto my-3 sm:my-3.5" />
 
-                <div className="space-y-3 sm:space-y-3.5 text-left max-w-xs mx-auto">
+                <div className="space-y-3 sm:space-y-3 text-left max-w-xs mx-auto">
                   <div className="flex items-center gap-2.5 sm:gap-3">
                     <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
                       <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
@@ -124,7 +124,7 @@ function TicketCard({
                 </div>
 
                 {quoteText && (
-                  <p className="text-amber-400/40 italic text-[10px] sm:text-xs mt-4 sm:mt-5 font-display">
+                  <p className="text-amber-400/40 italic text-[10px] sm:text-xs mt-3.5 sm:mt-4 font-display">
                     &ldquo;{quoteText}&rdquo;
                   </p>
                 )}
@@ -145,7 +145,7 @@ function TicketCard({
             </div>
 
             {/* VERTICAL PERFORATED DIVIDER — sm+ */}
-            <div className="hidden sm:block relative flex-shrink-0">
+            <div className="hidden sm:block relative flex-shrink-0 self-stretch">
               <div className="absolute inset-0 flex flex-col items-center justify-center px-1">
                 <div className="w-px h-full"
                   style={{
@@ -158,12 +158,14 @@ function TicketCard({
             </div>
 
             {/* BOTTOM / RIGHT — QR SECTION */}
-            <div className="w-full sm:w-36 md:w-44 p-5 sm:p-4 md:p-6 flex flex-col items-center justify-center flex-shrink-0 bg-zinc-900/80">
-              <div className="bg-white rounded-xl p-1.5 shadow-lg">
-                <canvas
-                  ref={(el) => { canvasRefs.current[ticket.id] = el; }}
-                  className="block w-[200px] h-[200px] sm:w-[140px] sm:h-[140px] md:w-[160px] md:h-[160px]"
-                />
+            <div className="w-full sm:w-auto sm:min-w-[190px] md:min-w-[210px] p-5 sm:p-6 md:p-7 flex flex-col items-center justify-center flex-shrink-0 bg-zinc-900/80">
+              <div className="bg-white rounded-xl p-1.5 shadow-lg w-full max-w-[200px] sm:max-w-[160px] md:max-w-[175px]">
+                <div className="w-full aspect-square">
+                  <canvas
+                    ref={(el) => { canvasRefs.current[ticket.id] = el; }}
+                    className="block w-full h-full"
+                  />
+                </div>
               </div>
               <p className="text-[9px] sm:text-[10px] text-amber-500/70 font-mono mt-2.5 sm:mt-3 tracking-wider break-all text-center max-w-full">
                 N° {ticket.secureToken.slice(0, 8).toUpperCase()}
