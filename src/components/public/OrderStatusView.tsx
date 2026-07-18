@@ -240,7 +240,7 @@ export function OrderStatusView({ order: initialOrder }: OrderStatusViewProps) {
   if (order.status === "PENDING") {
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-zinc-950">
-        <Card className="p-8 sm:p-10 max-w-lg w-full text-center border-zinc-800 bg-zinc-900">
+        <Card className="p-8 sm:p-10 max-w-lg w-full text-center border-amber-500/20 bg-zinc-900 shadow-[0_0_24px_rgba(212,175,55,0.04)]">
           <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-amber-500/20 text-amber-400 mb-5 sm:mb-6 animate-pulse-slow">
             <Clock className="w-8 h-8 sm:w-10 sm:h-10" />
           </div>
@@ -251,7 +251,7 @@ export function OrderStatusView({ order: initialOrder }: OrderStatusViewProps) {
             <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-amber-400" />
             <span className="text-zinc-300">Vérification en cours...{polling ? " (auto)" : ""}</span>
           </div>
-          <Button variant="secondary" fullWidth onClick={() => { fetchOrder(); }}>
+          <Button variant="outline" fullWidth onClick={() => { fetchOrder(); }}>
             Rafraîchir le statut
           </Button>
         </Card>
@@ -268,16 +268,17 @@ export function OrderStatusView({ order: initialOrder }: OrderStatusViewProps) {
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">Paiement confirmé !</h1>
           <p className="text-zinc-400 text-sm sm:text-base">{order.tickets.length} ticket{order.tickets.length > 1 ? "s" : ""} pour {order.buyerName}</p>
+          <div className="w-14 h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent mx-auto mt-4 sm:mt-5" />
         </div>
 
-        <Card className="p-4 sm:p-6 no-print border-zinc-800 bg-zinc-900/80">
+        <Card className="p-4 sm:p-6 no-print border-amber-500/20 bg-zinc-900/80 shadow-[0_0_24px_rgba(212,175,55,0.04)]">
           <div className="flex justify-between items-center">
             <div>
-              <p className="text-zinc-400 text-xs sm:text-sm">Total payé</p>
-              <p className="text-lg sm:text-2xl font-bold text-amber-400">{formatPrice(order.totalAmount)}</p>
+              <p className="font-display text-amber-400/50 text-xs sm:text-sm tracking-wide">Total payé</p>
+              <p className="font-display text-lg sm:text-2xl font-bold text-amber-400">{formatPrice(order.totalAmount)}</p>
             </div>
             <div className="text-right">
-              <p className="text-zinc-400 text-xs sm:text-sm">Statut</p>
+              <p className="font-display text-amber-400/50 text-xs sm:text-sm tracking-wide">Statut</p>
               <p className="text-emerald-400 font-semibold text-sm sm:text-base">Validé</p>
             </div>
           </div>
@@ -296,13 +297,13 @@ export function OrderStatusView({ order: initialOrder }: OrderStatusViewProps) {
           ))}
         </div>
 
-        <div className="flex justify-center no-print pt-2 sm:pt-4">
-          <Button variant="secondary" onClick={() => window.print()}>
+        <div className="flex justify-center no-print pt-4 sm:pt-6">
+          <Button variant="outline" onClick={() => window.print()}>
             <Printer className="w-4 h-4" /> Télécharger / Imprimer
           </Button>
         </div>
 
-        <p className="text-center text-zinc-700 text-[10px] sm:text-xs no-print pb-6 sm:pb-8">
+        <p className="text-center text-zinc-600 text-[10px] sm:text-xs no-print pb-6 sm:pb-8 tracking-wide">
           Présentez ce billet (numérique ou imprimé) au contrôle d&apos;accès.
         </p>
       </div>
@@ -311,7 +312,7 @@ export function OrderStatusView({ order: initialOrder }: OrderStatusViewProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-zinc-950">
-      <Card className="p-8 sm:p-10 max-w-lg w-full text-center border-zinc-800 bg-zinc-900">
+      <Card className="p-8 sm:p-10 max-w-lg w-full text-center border-amber-500/20 bg-zinc-900 shadow-[0_0_24px_rgba(212,175,55,0.04)]">
         <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-red-500/20 text-red-400 mb-5 sm:mb-6">
           <AlertCircle className="w-8 h-8 sm:w-10 sm:h-10" />
         </div>
